@@ -285,7 +285,7 @@ class Attention(nn.Module):
         attn_probs = t.softmax(attn_scores, dim=-1)
 
         
-        Z = einops.einsum(V, attn_probs, "batch key_pos n_heads dhead, batch n_heads query_pos key_pos -> batch query_pos n_heads dhead")
+        Z = einops.einsum(V, attn_probs, "batch val_pos n_heads dhead, batch n_heads qk_pos val_pos -> batch qk_pos n_heads dhead")
         # w_O is n_heads, d_head, d_model
         # we use it to get [batch, posn, n_heads, d_model], transforming each head into a larger space
         # then we sum up all the heads so we have [batch, posn, d_model]
