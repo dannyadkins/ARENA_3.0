@@ -231,3 +231,101 @@ class PosEmbed(nn.Module):
 rand_int_test(PosEmbed, [2, 4])
 load_gpt2_test(PosEmbed, reference_gpt2.pos_embed, tokens)
 # %%
+
+# EXERCISE: self-attention
+
+class Attention(nn.Module):
+    IGNORE: Float[Tensor, ""]
+
+    def __init__(self, cfg: Config):
+        super().__init__()
+        self.cfg = cfg
+        self.W_Q = nn.Parameter(t.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
+        self.W_K = nn.Parameter(t.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
+        self.W_V = nn.Parameter(t.empty((cfg.n_heads, cfg.d_model, cfg.d_head)))
+        self.W_O = nn.Parameter(t.empty((cfg.n_heads, cfg.d_head, cfg.d_model)))
+        self.b_Q = nn.Parameter(t.zeros((cfg.n_heads, cfg.d_head)))
+        self.b_K = nn.Parameter(t.zeros((cfg.n_heads, cfg.d_head)))
+        self.b_V = nn.Parameter(t.zeros((cfg.n_heads, cfg.d_head)))
+        self.b_O = nn.Parameter(t.zeros((cfg.d_model)))
+        nn.init.normal_(self.W_Q, std=self.cfg.init_range)
+        nn.init.normal_(self.W_K, std=self.cfg.init_range)
+        nn.init.normal_(self.W_V, std=self.cfg.init_range)
+        nn.init.normal_(self.W_O, std=self.cfg.init_range)
+        self.register_buffer("IGNORE", t.tensor(-1e5, dtype=t.float32, device=device))
+
+    def forward(
+        self, normalized_resid_pre: Float[Tensor, "batch posn d_model"]
+    ) -> Float[Tensor, "batch posn d_model"]:
+        # einsums batch_size, seq_len, dim_model X n_heads, dim_model 
+        # output should be: batch_size, num_tokens, num_heads, dim_head 
+        qkv_equation = 'batch posn dmodel, nheads dmodel dhead -> batch posn nheads dhead'
+        Q: Float[Tensor, 'batch posn nheads dhead'] = einops.einsum(normalized_resid_pre, self.W_Q, qkv_equation) + self.b_Q
+        K: Float[Tensor, 'batch posn nheads dhead'] = einops.einsum(normalized_resid_pre, self.W_K, qkv_equation) + self.b_K
+        V: Float[Tensor, 'batch posn nheads dhead'] = einops.einsum(normalized_resid_pre, self.W_V, qkv_equation) + self.b_V
+
+        # attn = softmax(q dot k) / sqrt(d_model) * v
+        print("QKV shape: ", Q.shape)
+
+        # softmaxing it gets the softmaxed qk scores, which can be thought of as identfying "how relevant" some info is.
+        # for each batch, for each head, we have the score of the query from one token to the key of another token
+        # these reshapes put it into batch_size, posn, nheads*dhead 
+        
+        attn_scores = einops.einsum(Q, K, "batch query_pos nheads dhead, batch key_pos nheads dhead -> batch nheads query_pos key_pos")
+        print("Attn_scores: ", attn_scores.shape)
+
+        attn_scores = self.apply_causal_mask(attn_scores)
+        attn_scores: Float[Tensor, 'batch n_heads query_pos key_pos'] = attn_scores / self.cfg.d_head ** 0.5
+
+        # attn_scores is [batch nheads posn posn]
+        # V is [batch posn nheads dhead]
+        # we want to output size: [batch posn nheads dhead]
+        attn_probs = t.softmax(attn_scores, dim=-1)
+
+        Z = einops.einsum(attn_probs, V, "batch n_heads query_pos key_pos, batch posn nheads dhead -> batch posn nheads dhead")
+        
+        # w_O is n_heads, d_head, d_model
+        # we use it to get [batch, posn, n_heads, d_model], transforming each head into a larger space
+        # then we sum up all the heads so we have [batch, posn, d_model]
+        O = einops.einsum(Z, self.W_O, "batch posn n_heads d_head, n_heads d_head d_model -> batch posn d_head d_model")
+        summed = einops.reduce(O, "batch posn d_head d_model -> batch posn d_model", "sum") + self.b_O
+        print("Summed: ", summed)
+        return summed
+        
+
+    def apply_causal_mask(
+        self, attn_scores: Float[Tensor, "batch n_heads query_pos key_pos"]
+    ) -> Float[Tensor, "batch n_heads query_pos key_pos"]:
+        '''
+        Applies a causal mask to attention scores, and returns masked scores.
+        '''
+
+        # the mask should say for every position, can only look at prior positions
+        ones: Float[Tensor, "query_pos key_pos"] = t.ones(attn_scores.shape[-2], attn_scores.shape[-1])
+        # diagonal is 0 so it can't see itself, I think
+        mask: Float[Tensor, "query_pos key_pos"] = t.triu(ones, diagonal=0).bool()
+
+        # IGNORE is very large negative because... in softmax it turns to zero? 
+        # apply this to every 
+        masked_attn = t.masked_fill(
+            attn_scores, mask, self.IGNORE
+        )
+
+        return masked_attn
+
+
+rand_float_test(Attention, [2, 4, 768])
+load_gpt2_test(Attention, reference_gpt2.blocks[0].attn, cache["normalized", 0, "ln1"])
+
+
+
+# %%
+
+# %%
+
+# %%
+
+# %%
+
+# %%
+
