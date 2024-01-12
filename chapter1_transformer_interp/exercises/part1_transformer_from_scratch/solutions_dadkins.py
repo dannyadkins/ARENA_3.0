@@ -508,11 +508,13 @@ class TransformerTrainer:
         print("Training...")
         for epoch in range(self.args.epochs):
             loader = self.train_loader()
-            for batch in loader:
+            pbar = tqdm(loader, total=len(loader))
+            for batch in pbar:
                 loss = self.training_step(batch)
-                if self.step % 100 == 0:
-                    print(f"Step: {self.step}, Loss: {loss}")
+                if self.step % 20 == 0:
+                    pbar.set_description(f"Step: {self.step}, Loss: {loss}")
                 if self.step >= self.args.max_steps_per_epoch:
+                    self.step = 0
                     break
             val_loader = self.test_loader()
             val_acc = sum(self.validation_step(batch) for batch in val_loader) / len(val_loader)
