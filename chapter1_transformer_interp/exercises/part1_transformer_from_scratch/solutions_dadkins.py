@@ -234,6 +234,10 @@ load_gpt2_test(PosEmbed, reference_gpt2.pos_embed, tokens)
 
 # EXERCISE: self-attention
 
+# set torch random seed
+t.manual_seed(0)
+
+
 class Attention(nn.Module):
     IGNORE: Float[Tensor, ""]
 
@@ -272,25 +276,30 @@ class Attention(nn.Module):
         # these reshapes put it into batch_size, posn, nheads*dhead 
         
         attn_scores = einops.einsum(Q, K, "batch query_pos nheads dhead, batch key_pos nheads dhead -> batch nheads query_pos key_pos")
-        print("Attn_scores: ", attn_scores.shape)
 
-        attn_scores = self.apply_causal_mask(attn_scores)
-        attn_scores: Float[Tensor, 'batch n_heads query_pos key_pos'] = attn_scores / self.cfg.d_head ** 0.5
+        attn_scores = attn_scores / self.cfg.d_head ** 0.5
 
+        attn_scores: Float[Tensor, 'batch n_heads query_pos key_pos'] = self.apply_causal_mask(attn_scores)
+        
         # attn_scores is [batch nheads posn posn]
         # V is [batch posn nheads dhead]
         # we want to output size: [batch posn nheads dhead]
         attn_probs = t.softmax(attn_scores, dim=-1)
 
-        Z = einops.einsum(attn_probs, V, "batch n_heads query_pos key_pos, batch posn nheads dhead -> batch posn nheads dhead")
         
+        Z = einops.einsum(V, attn_probs, "batch key_pos n_heads dhead, batch n_heads query_pos key_pos -> batch query_pos n_heads dhead")
         # w_O is n_heads, d_head, d_model
         # we use it to get [batch, posn, n_heads, d_model], transforming each head into a larger space
         # then we sum up all the heads so we have [batch, posn, d_model]
-        O = einops.einsum(Z, self.W_O, "batch posn n_heads d_head, n_heads d_head d_model -> batch posn d_head d_model")
-        summed = einops.reduce(O, "batch posn d_head d_model -> batch posn d_model", "sum") + self.b_O
-        print("Summed: ", summed)
-        return summed
+        print("Z: ", Z)
+        O = einops.einsum(
+			Z, self.W_O,
+			"batch posn_Q nheads d_head, nheads d_head d_model -> batch posn_Q d_model", 
+		) + self.b_O
+        
+        print("Summed: ", O)
+
+        return O
         
 
     def apply_causal_mask(
@@ -303,7 +312,7 @@ class Attention(nn.Module):
         # the mask should say for every position, can only look at prior positions
         ones: Float[Tensor, "query_pos key_pos"] = t.ones(attn_scores.shape[-2], attn_scores.shape[-1])
         # diagonal is 0 so it can't see itself, I think
-        mask: Float[Tensor, "query_pos key_pos"] = t.triu(ones, diagonal=0).bool()
+        mask: Float[Tensor, "query_pos key_pos"] = t.triu(ones, diagonal=1).bool()
 
         # IGNORE is very large negative because... in softmax it turns to zero? 
         # apply this to every 
