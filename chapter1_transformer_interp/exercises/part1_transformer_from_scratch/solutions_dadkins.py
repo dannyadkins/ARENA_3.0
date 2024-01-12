@@ -285,7 +285,7 @@ class Attention(nn.Module):
         attn_probs = t.softmax(attn_scores, dim=-1)
 
         
-        Z = einops.einsum(V, attn_probs, "batch val_pos n_heads dhead, batch n_heads qk_pos val_pos -> batch qk_pos n_heads dhead")
+        Z = einops.einsum(V, attn_probs, "batch posn_K nheads d_head, batch nheads posn_Q posn_K -> batch posn_Q nheads d_head")
         # w_O is n_heads, d_head, d_model
         # we use it to get [batch, posn, n_heads, d_model], transforming each head into a larger space
         # then we sum up all the heads so we have [batch, posn, d_model]
@@ -294,7 +294,6 @@ class Attention(nn.Module):
 			"batch posn_Q nheads d_head, nheads d_head d_model -> batch posn_Q d_model", 
 		) + self.b_O
         
-
         return O
         
 
@@ -411,7 +410,12 @@ class DemoTransformer(nn.Module):
         
 
 rand_int_test(DemoTransformer, [2, 4])
-load_gpt2_test(DemoTransformer, reference_gpt2, tokens)# %%
+load_gpt2_test(DemoTransformer, reference_gpt2, tokens)
 
+# %%
+demo_gpt2 = DemoTransformer(Config(debug=False)).to(device)
+demo_gpt2.load_state_dict(reference_gpt2.state_dict(), strict=False)
+
+demo_logits = demo_gpt2(tokens)
 # %%
 
