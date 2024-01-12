@@ -419,3 +419,97 @@ demo_gpt2.load_state_dict(reference_gpt2.state_dict(), strict=False)
 demo_logits = demo_gpt2(tokens)
 # %%
 
+### training setup
+
+model_cfg = Config(
+    debug=False, 
+    d_model=256, 
+    n_heads=4, 
+    d_head=64, 
+    d_mlp=1024, 
+    n_layers=2, 
+    n_ctx=256, 
+    d_vocab=reference_gpt2.cfg.d_vocab
+)
+model = DemoTransformer(model_cfg)
+
+@dataclass
+class TransformerTrainingArgs():
+    batch_size = 16
+    epochs = 10
+    max_steps_per_epoch = 200
+    lr = 1e-3
+    weight_decay = 1e-2
+    wandb_project: Optional[str] = "day1-demotransformer"
+    wandb_name: Optional[str] = None
+
+args = TransformerTrainingArgs()
+
+dataset = datasets.load_dataset("NeelNanda/pile-10k", split="train").remove_columns("meta")
+print(dataset)
+print(dataset[0]['text'][:100])
+
+tokenized_dataset = tokenize_and_concatenate(dataset, reference_gpt2.tokenizer, streaming=False, max_length=model.cfg.n_ctx, column_name="text", add_bos_token=True, num_proc=4)
+
+dataset_dict = tokenized_dataset.train_test_split(test_size=1000)
+train_loader = DataLoader(dataset_dict["train"], batch_size=args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+test_loader = DataLoader(dataset_dict["test"], batch_size=args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
+
+first_batch = train_loader.dataset[:args.batch_size]
+
+print(first_batch.keys())
+print(first_batch['tokens'].shape)
+# %%
+
+# Exercise: training loop
+
+class TransformerTrainer:
+    def __init__(self, args: TransformerTrainingArgs, model: DemoTransformer):
+        super().__init__()
+        self.model = model
+        self.args = args
+        self.optimizer = t.optim.AdamW(self.model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        self.step = 0
+
+    def training_step(self, batch: Dict[str, Int[Tensor, "batch seq"]]) -> Float[Tensor, ""]:
+        '''
+        Calculates the loss on the tokens in the batch, performs a gradient update step, and logs the loss.
+
+		Remember that `batch` is a dictionary with the single key 'tokens'.
+		'''
+        # YOUR CODE HERE
+        pass 
+
+    def validation_step(self, batch: Dict[str, Int[Tensor, "batch seq"]]):
+        '''
+		Calculates & returns the accuracy on the tokens in the batch (i.e. how often the model's prediction
+		is correct). Logging should happen in the `train` function (after we've computed the accuracy for 
+		the whole validation set).
+		'''
+        # YOUR CODE HERE
+        pass
+
+    def train(self):
+        '''
+		Trains the model, for `self.args.epochs` epochs. Also handles wandb initialisation, and early stopping
+		for each epoch at `self.args.max_steps_per_epoch` steps.
+		'''
+        # YOUR CODE HERE
+        
+        loader = self.train_loader()
+        for batch in loader:
+            print(batch)
+    
+    def train_loader(self) -> DataLoader:
+        '''Returns train loader (as in code above).'''
+        return DataLoader(dataset_dict["train"], batch_size=self.args.batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    
+    def test_loader(self) -> DataLoader:
+        '''Returns test loader (as in code above).'''
+        return DataLoader(dataset_dict["test"], batch_size=self.args.batch_size, shuffle=False, num_workers=4, pin_memory=True)
+
+model = DemoTransformer(model_cfg).to(device)
+args = TransformerTrainingArgs()
+trainer = TransformerTrainer(args, model)
+trainer.train()
+# %%
