@@ -35,6 +35,7 @@ from plotly_utils import imshow
 # import part1_transformer_from_scratch.solutions as solutions
 
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
+print("Using device: ", device)
 
 MAIN = __name__ == '__main__'
 
@@ -307,7 +308,7 @@ class Attention(nn.Module):
         # the mask should say for every position, can only look at prior positions
         ones: Float[Tensor, "query_pos key_pos"] = t.ones(attn_scores.shape[-2], attn_scores.shape[-1])
         # diagonal is 0 so it can't see itself, I think
-        mask: Float[Tensor, "query_pos key_pos"] = t.triu(ones, diagonal=1).bool()
+        mask: Float[Tensor, "query_pos key_pos"] = t.triu(ones, diagonal=1).bool().to(device)
 
         # IGNORE is very large negative because... in softmax it turns to zero? 
         # apply this to every 
@@ -466,7 +467,7 @@ print(first_batch['tokens'].shape)
 class TransformerTrainer:
     def __init__(self, args: TransformerTrainingArgs, model: DemoTransformer):
         super().__init__()
-        self.model = model
+        self.model = model.to(device)
         self.args = args
         self.optimizer = t.optim.AdamW(self.model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
         self.step = 0
@@ -477,8 +478,14 @@ class TransformerTrainer:
 
 		Remember that `batch` is a dictionary with the single key 'tokens'.
 		'''
-        # YOUR CODE HERE
-        pass 
+        tokens = batch['tokens'].to(device)
+        logits = self.model(tokens)
+        loss = t.nn.functional.cross_entropy(logits.view(-1, logits.size(-1)), tokens.view(-1))
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        self.step += 1
+        return loss.item()
 
     def validation_step(self, batch: Dict[str, Int[Tensor, "batch seq"]]):
         '''
@@ -486,19 +493,30 @@ class TransformerTrainer:
 		is correct). Logging should happen in the `train` function (after we've computed the accuracy for 
 		the whole validation set).
 		'''
-        # YOUR CODE HERE
-        pass
+        tokens = batch['tokens'].to(device)
+        logits = self.model(tokens)
+        preds = logits.argmax(dim=-1)
+        correct = (preds == tokens).sum().item()
+        total = tokens.numel()
+        return correct / total
 
     def train(self):
         '''
 		Trains the model, for `self.args.epochs` epochs. Also handles wandb initialisation, and early stopping
 		for each epoch at `self.args.max_steps_per_epoch` steps.
 		'''
-        # YOUR CODE HERE
-        
-        loader = self.train_loader()
-        for batch in loader:
-            print(batch)
+        print("Training...")
+        for epoch in range(self.args.epochs):
+            loader = self.train_loader()
+            for batch in loader:
+                loss = self.training_step(batch)
+                if self.step % 100 == 0:
+                    print(f"Step: {self.step}, Loss: {loss}")
+                if self.step >= self.args.max_steps_per_epoch:
+                    break
+            val_loader = self.test_loader()
+            val_acc = sum(self.validation_step(batch) for batch in val_loader) / len(val_loader)
+            print(f"Epoch: {epoch}, Validation Accuracy: {val_acc}")
     
     def train_loader(self) -> DataLoader:
         '''Returns train loader (as in code above).'''
