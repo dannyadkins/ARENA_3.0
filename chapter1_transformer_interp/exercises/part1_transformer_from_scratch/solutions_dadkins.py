@@ -188,7 +188,6 @@ class LayerNorm(nn.Module):
         b = self.b
 
         out = (residual - mean ) / t.sqrt(variance + eps) * w + b
-        print(out.shape)
         return out          
 
 rand_float_test(LayerNorm, [2, 4, 768])
@@ -269,7 +268,6 @@ class Attention(nn.Module):
         V: Float[Tensor, 'batch posn nheads dhead'] = einops.einsum(normalized_resid_pre, self.W_V, qkv_equation) + self.b_V
 
         # attn = softmax(q dot k) / sqrt(d_model) * v
-        print("QKV shape: ", Q.shape)
 
         # softmaxing it gets the softmaxed qk scores, which can be thought of as identfying "how relevant" some info is.
         # for each batch, for each head, we have the score of the query from one token to the key of another token
@@ -291,13 +289,11 @@ class Attention(nn.Module):
         # w_O is n_heads, d_head, d_model
         # we use it to get [batch, posn, n_heads, d_model], transforming each head into a larger space
         # then we sum up all the heads so we have [batch, posn, d_model]
-        print("Z: ", Z)
         O = einops.einsum(
 			Z, self.W_O,
 			"batch posn_Q nheads d_head, nheads d_head d_model -> batch posn_Q d_model", 
 		) + self.b_O
         
-        print("Summed: ", O)
 
         return O
         
