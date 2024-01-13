@@ -652,7 +652,7 @@ class TransformerSampler:
         '''
         Applies temperature scaling to the logits.
         '''
-        pass
+        return logits / temperature
 
     @staticmethod
     def apply_frequency_penalty(input_ids: Int[Tensor, "seq_len"], logits: Float[Tensor, "d_vocab"], freq_penalty: float) -> Float[Tensor, "d_vocab"]:
@@ -729,6 +729,21 @@ for word in expected_top_5:
     assert abs(observed_freq - expected_freq) < 0.01, "Try increasing N if this fails by a small amount."
 
 print("Basic categorical sampling tests passed!")
+
+# Exercise: temperature sampling
+
+logits = t.tensor([1, 2]).log()
+
+cold_logits = TransformerSampler.apply_temperature(logits, temperature=0.001)
+print('A low temperature "sharpens" or "peaks" the distribution: ', cold_logits)
+t.testing.assert_close(cold_logits, 1000.0 * logits)
+
+hot_logits = TransformerSampler.apply_temperature(logits, temperature=1000.0)
+print("A high temperature flattens the distribution: ", hot_logits)
+t.testing.assert_close(hot_logits, 0.001 * logits)
+
+print("Temperature sampling passed!")
+
 
 # %%
 
