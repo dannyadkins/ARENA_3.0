@@ -659,8 +659,17 @@ class TransformerSampler:
         '''
         Applies a frequency penalty to the logits.
         '''
-        pass
+        # Count the frequency of each token in the input
+        token_freq = t.bincount(input_ids)
 
+        # extend token_freq to match the size of logits
+        token_freq = t.cat([token_freq, t.zeros(logits.shape[0] - token_freq.shape[0])])
+
+        # Apply frequency penalty
+        logits = logits - freq_penalty * token_freq
+
+        return logits
+    
     @staticmethod
     def sample_basic(logits: Float[Tensor, "d_vocab"]) -> int:
         '''
@@ -687,6 +696,7 @@ class TransformerSampler:
         '''
         pass
 
+# %% 
 
 sampler = TransformerSampler(model, tokenizer)
 
@@ -701,6 +711,7 @@ assert output == expected
 
 print("Greedy sampling passed!")
 
+# %% 
 
 # Exercise: categorical sampling
 
@@ -730,6 +741,8 @@ for word in expected_top_5:
 
 print("Basic categorical sampling tests passed!")
 
+# %% 
+
 # Exercise: temperature sampling
 
 logits = t.tensor([1, 2]).log()
@@ -746,6 +759,18 @@ print("Temperature sampling passed!")
 
 
 # %%
+
+# Exercise: frequency penalty
+
+bieber_prompt = "And I was like Baby, baby, baby, oh Like, Baby, baby, baby, no Like, Baby, baby, baby, oh I thought you'd always be mine, mine"
+input_ids = tokenizer.encode(bieber_prompt, return_tensors="pt")
+logits = t.ones(tokenizer.vocab_size)
+penalized_logits = TransformerSampler.apply_frequency_penalty(input_ids.squeeze(), logits, 2.0)
+
+assert penalized_logits[5156].item() == -11, "Expected 6 occurrences of ' baby' with leading space, 1-2*6=-11"
+assert penalized_logits[14801].item() == -5, "Expected 3 occurrences of ' Baby' with leading space, 1-2*3=-5"
+
+print("Frequency penalty tests passed!")
 
 # %%
 
