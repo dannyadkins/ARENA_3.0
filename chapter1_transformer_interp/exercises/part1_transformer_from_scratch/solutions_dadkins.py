@@ -687,7 +687,15 @@ class TransformerSampler:
         '''
         Samples from the top k most likely tokens.
         '''
-        pass
+        # sort the logits and select the top k
+        top_k_logits, top_k_indices = t.topk(logits, k)
+
+        # create a categorical distribution and sample from it
+        dist = t.distributions.Categorical(logits=top_k_logits)
+        sample = dist.sample()
+
+        # return the sampled token
+        return top_k_indices[sample].item()
 
     @staticmethod
     def sample_top_p(logits: Float[Tensor, "d_vocab"], top_p: float, min_tokens_to_keep: int = 1) -> int:
@@ -773,5 +781,34 @@ assert penalized_logits[14801].item() == -5, "Expected 3 occurrences of ' Baby' 
 print("Frequency penalty tests passed!")
 
 # %%
+
+# Exercise: top k sampling
+
+prompt = "John and Mary went to the"
+input_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
+logits = model(input_ids)[0, -1]
+
+expected_top_5 = {
+    " church": 0.0648,
+    " house": 0.0367,
+    " temple": 0.0145,
+    " same": 0.0104,
+    " Church": 0.0097
+}
+topk_5_sum = sum(expected_top_5.values())
+
+observed_freqs = defaultdict(int)
+
+N = 10000
+for _ in tqdm(range(N)):
+    token = TransformerSampler.sample_next_token(input_ids.squeeze(), logits, top_k=5)
+    observed_freqs[tokenizer.decode(token)] += 1
+
+for word in expected_top_5:
+    expected_freq = expected_top_5[word] / topk_5_sum
+    observed_freq = observed_freqs[word] / N
+    print(f"Word: {word!r:<9}. Expected freq = {expected_freq:.4f}, observed freq = {observed_freq:.4f}")
+    assert abs(observed_freq - expected_freq) < 0.015, "Try increasing N if this fails by a small amount."
+
 
 # %%
