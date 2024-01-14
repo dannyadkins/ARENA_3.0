@@ -51,3 +51,24 @@ n_layers = gpt2_small.cfg.n_layers
 n_heads = gpt2_small.cfg.n_heads
 n_ctx = gpt2_small.cfg.n_ctx 
 # %%
+print(gpt2_small.to_str_tokens("gpt2"))
+print(gpt2_small.to_tokens("gpt2"))
+print(gpt2_small.to_string([50256, 70, 457, 17]))
+# %%
+
+model_description_text = '''## Loading Models
+
+HookedTransformer comes loaded with >40 open source GPT-style models. You can load any of them in with `HookedTransformer.from_pretrained(MODEL_NAME)`. Each model is loaded into the consistent HookedTransformer architecture, designed to be clean, consistent and interpretability-friendly. 
+
+For this demo notebook we'll look at GPT-2 Small, an 80M parameter model. To try the model the model out, let's find the loss on this paragraph!'''
+
+loss = gpt2_small(model_description_text, return_type="loss")
+print("Model loss:", loss)
+
+logits: Tensor = gpt2_small(model_description_text, return_type="logits")
+prediction = logits.argmax(dim=-1).squeeze()[:-1]
+
+print(prediction.shape)
+input_tokens = gpt2_small.to_tokens(model_description_text).squeeze()[1:]
+print("Correct token count: ", (input_tokens == prediction).bool().sum())
+# %%
