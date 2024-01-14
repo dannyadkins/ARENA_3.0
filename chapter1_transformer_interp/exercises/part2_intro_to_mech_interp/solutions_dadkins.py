@@ -79,4 +79,23 @@ gpt2_logits, gpt2_cache = gpt2_small.run_with_cache(gpt2_tokens, remove_batch_di
 attn_patterns_layer_0 = gpt2_cache["pattern", 0]
 
 # %% 
+import math 
+# Exercise: verify activations
 
+layer0_pattern_from_cache = gpt2_cache["pattern", 0]
+
+# My code
+# q, k caches are [num_tokens, num_heads, d_head]
+q = gpt2_cache["blocks.0.attn.hook_q"]
+k = gpt2_cache["blocks.0.attn.hook_k"]
+
+qk = einops.einsum(q, k, 'ntq nh dh, ntk nh dh -> nh ntq ntk')
+
+mask = t.triu(t.ones(q.shape[0], k.shape[0]), diagonal=1).bool().to(qk.device)
+qk_masked = t.masked_fill(qk, mask, -1e9)
+
+layer0_pattern_from_q_and_k = t.nn.functional.softmax(qk_masked / math.sqrt(gpt2_small.cfg.d_head), dim=-1)
+# pattern should be: [num_heads, num_tokens, num_tokens]
+
+t.testing.assert_close(layer0_pattern_from_cache, layer0_pattern_from_q_and_k)
+print("Manual activations tests passed!")
