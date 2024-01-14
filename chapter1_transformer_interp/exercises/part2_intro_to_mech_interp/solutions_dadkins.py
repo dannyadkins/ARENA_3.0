@@ -192,3 +192,52 @@ display(cv.attention.attention_patterns(
 
 
 # %%
+def current_attn_detector(cache: ActivationCache) -> List[str]:
+    '''
+    Returns a list e.g. ["0.2", "1.4", "1.9"] of "layer.head" which you judge to be current-token heads
+    '''
+    out = []
+    for layer in range(cfg.n_layers):
+        for head in range(cfg.n_heads):
+            pattern = cache['pattern', layer][head]
+            diag = t.diag(pattern)
+            avg_current_value = diag.mean()
+            # print("Average current value for ", layer, head, " is: ", avg_current_value)
+            if (avg_current_value > 0.3):
+                out.append(str(layer) + "." + str(head))
+    return out 
+
+def prev_attn_detector(cache: ActivationCache) -> List[str]:
+    '''
+    Returns a list e.g. ["0.2", "1.4", "1.9"] of "layer.head" which you judge to be prev-token heads
+    '''
+    out = []
+    for layer in range(cfg.n_layers):
+        for head in range(cfg.n_heads):
+            pattern = cache['pattern', layer][head]
+            diag = t.diag(pattern, diagonal=-1)
+            avg_prev_value = diag.mean()
+            # print("Average current value for ", layer, head, " is: ", avg_current_value)
+            if (avg_prev_value > 0.3):
+                out.append(str(layer) + "." + str(head))
+    return out 
+
+
+def first_attn_detector(cache: ActivationCache) -> List[str]:
+    '''
+    Returns a list e.g. ["0.2", "1.4", "1.9"] of "layer.head" which you judge to be first-token heads
+    '''
+    out = []
+    for layer in range(cfg.n_layers):
+        for head in range(cfg.n_heads):
+            pattern = cache['pattern', layer][head]
+            avg_prev_value = pattern[:, 0].mean()
+            # print("Average current value for ", layer, head, " is: ", avg_current_value)
+            if (avg_prev_value > 0.5):
+                out.append(str(layer) + "." + str(head))
+    return out 
+
+
+print("Heads attending to current token  = ", ", ".join(current_attn_detector(cache)))
+print("Heads attending to previous token = ", ", ".join(prev_attn_detector(cache)))
+print("Heads attending to first token    = ", ", ".join(first_attn_detector(cache)))
