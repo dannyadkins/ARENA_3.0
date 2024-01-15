@@ -317,3 +317,25 @@ def induction_attn_detector(cache: ActivationCache) -> List[str]:
     return out 
 
 print("Induction heads = ", ", ".join(induction_attn_detector(rep_cache)))
+
+# %% 
+
+tokens = "Here is a hooked transformer function"
+
+def hook_function(
+    attn_pattern: Float[Tensor, "batch heads seqQ seqK"],
+    hook: HookPoint
+) -> Float[Tensor, "batch heads seqQ seqK"]:
+
+    # modify attn_pattern (can be inplace)
+    return attn_pattern
+
+loss = model.run_with_hooks(
+    tokens, 
+    return_type="loss",
+    fwd_hooks=[
+        ('blocks.1.attn.hook_pattern', hook_function)
+    ]
+)
+
+print(loss)
