@@ -288,3 +288,11 @@ print(f"Performance on the first half: {log_probs[:seq_len].mean():.3f}")
 print(f"Performance on the second half: {log_probs[seq_len:].mean():.3f}")
 
 plot_loss_difference(log_probs, rep_str, seq_len)
+
+# %% 
+
+# Exercise: looking for induction heads with charts
+
+# We see heads 4 and 10 look like induction heads (or they are using positional encoding, but could easily invalidate that)
+display(cv.attention.attention_patterns(attention=rep_cache["pattern", 1], tokens=rep_str))
+
