@@ -296,3 +296,24 @@ plot_loss_difference(log_probs, rep_str, seq_len)
 # We see heads 4 and 10 look like induction heads (or they are using positional encoding, but could easily invalidate that)
 display(cv.attention.attention_patterns(attention=rep_cache["pattern", 1], tokens=rep_str))
 
+# %% 
+
+# Exercise: induction head detector
+
+def induction_attn_detector(cache: ActivationCache) -> List[str]:
+    '''
+    Returns a list e.g. ["0.2", "1.4", "1.9"] of "layer.head" which you judge to be induction heads
+
+    Remember - the tokens used to generate rep_cache are (bos_token, *rand_tokens, *rand_tokens)
+    '''
+    out = []
+    for layer in range(cfg.n_layers):
+        for head in range(cfg.n_heads):
+            head_name = str(layer) + "." + str(head)
+            attn_pattern = cache['pattern', layer][head]
+            attn_diag = t.diag(attn_pattern, diagonal=-1*int((attn_pattern.shape[1]-1)/2 - 1))
+            if (attn_diag.mean() > 0.3):
+                out.append(head_name)
+    return out 
+
+print("Induction heads = ", ", ".join(induction_attn_detector(rep_cache)))
