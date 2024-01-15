@@ -241,3 +241,50 @@ def first_attn_detector(cache: ActivationCache) -> List[str]:
 print("Heads attending to current token  = ", ", ".join(current_attn_detector(cache)))
 print("Heads attending to previous token = ", ", ".join(prev_attn_detector(cache)))
 print("Heads attending to first token    = ", ", ".join(first_attn_detector(cache)))
+
+# %%
+
+# Exercise: induction heads, plotting per-token loss on repeated data
+
+def generate_repeated_tokens(
+    model: HookedTransformer, seq_len: int, batch: int = 1
+) -> Int[Tensor, "batch full_seq_len"]:
+    '''
+    Generates a sequence of repeated random tokens
+
+    Outputs are:
+        rep_tokens: [batch, 1+2*seq_len]
+    '''
+    prefix = (t.ones(batch, 1) * model.tokenizer.bos_token_id).long()
+    half = t.randint(0, model.tokenizer.vocab_size, (batch, seq_len))
+    repeat = half.clone()
+    return t.cat([prefix, half, repeat], dim=1).to(device)
+
+def run_and_cache_model_repeated_tokens(model: HookedTransformer, seq_len: int, batch: int = 1) -> Tuple[t.Tensor, t.Tensor, ActivationCache]:
+    '''
+    Generates a sequence of repeated random tokens, and runs the model on it, returning logits, tokens and cache
+
+    Should use the `generate_repeated_tokens` function above
+
+    Outputs are:
+        rep_tokens: [batch, 1+2*seq_len]
+        rep_logits: [batch, 1+2*seq_len, d_vocab]
+        rep_cache: The cache of the model run on rep_tokens
+    '''
+    rep_tokens = generate_repeated_tokens(model, seq_len, batch)
+    rep_logits, rep_cache = model.run_with_cache(rep_tokens)
+    return rep_tokens, rep_logits, rep_cache
+
+
+seq_len = 50
+batch = 1
+(rep_tokens, rep_logits, rep_cache) = run_and_cache_model_repeated_tokens(model, seq_len, batch)
+rep_cache.remove_batch_dim()
+rep_str = model.to_str_tokens(rep_tokens)
+model.reset_hooks()
+log_probs = get_log_probs(rep_logits, rep_tokens).squeeze()
+
+print(f"Performance on the first half: {log_probs[:seq_len].mean():.3f}")
+print(f"Performance on the second half: {log_probs[seq_len:].mean():.3f}")
+
+plot_loss_difference(log_probs, rep_str, seq_len)
