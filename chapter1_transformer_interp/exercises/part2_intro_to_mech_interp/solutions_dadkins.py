@@ -357,7 +357,6 @@ def induction_score_hook(
     '''
     Calculates the induction score, and stores it in the [layer, head] position of the `induction_score_store` tensor.
     '''
-    print("Hook:", hook)
     attn_diag = pattern.diagonal(dim1=-2, dim2=-1, offset=-1*int((pattern.size(-1)-1)/2 - 1))
     
     # average across batch and position
@@ -388,3 +387,51 @@ imshow(
     width=900, height=400
 )
 # %%
+
+gpt2_small_induction_score_store = t.zeros((gpt2_small.cfg.n_layers, gpt2_small.cfg.n_heads), device=gpt2_small.cfg.device)
+
+def gpt2_small_induction_score_hook(
+    pattern: Float[Tensor, "batch head_index dest_pos source_pos"],
+    hook: HookPoint,
+):
+    '''
+    Calculates the induction score, and stores it in the [layer, head] position of the `induction_score_store` tensor.
+    '''
+    attn_diag = pattern.diagonal(dim1=-2, dim2=-1, offset=-1*int((pattern.size(-1)-1)/2 - 1))
+    
+    # average across batch and position
+    score = einops.reduce(attn_diag, "batch head_index position -> head_index", "mean")
+    
+    gpt2_small_induction_score_store[hook.layer(), :] = score
+
+def visualize_pattern_hook(
+    pattern: Float[Tensor, "batch head_index dest_pos source_pos"],
+    hook: HookPoint,
+):
+    print("Layer: ", hook.layer())
+    display(
+        cv.attention.attention_patterns(
+            tokens=gpt2_small.to_str_tokens(rep_tokens[0]), 
+            attention=pattern.mean(0)
+        )
+    )
+
+# here, we find induction in gpt2_small 
+gpt2_small.run_with_hooks(
+    rep_tokens_10,
+    fwd_hooks=[(
+        lambda name: name.endswith("pattern"),
+        gpt2_small_induction_score_hook
+    )]
+)
+
+imshow(
+    gpt2_small_induction_score_store, 
+    labels={"x": "Head", "y": "Layer"}, 
+    title="GPT2_small induction score by head", 
+    text_auto=".2f",
+    width=900, height=400
+)
+
+# Induction heads in  5.0, 5.1, 5.5, 6.9, 7.3, 7.10, and some weaker ones in L10/L11
+
