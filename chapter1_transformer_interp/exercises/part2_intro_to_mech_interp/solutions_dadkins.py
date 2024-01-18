@@ -467,7 +467,7 @@ def logit_attribution(
     # this finds out, for each logit in the sequence, how much the embedding layer contributing to that logit 
     embed_attribution = einops.einsum(W_U_correct_tokens, embed[:-1], "emb seq, seq emb -> seq")
 
-    # how much L1 contributed to that logit 
+    # how much each head in L1 contributed to that logit 
     l1_attribution =  einops.einsum(W_U_correct_tokens, l1_results[:-1], "d_model seq_len, seq_len n_heads d_model -> seq_len n_heads")
 
     l2_attribution =  einops.einsum(W_U_correct_tokens, l2_results[:-1], "d_model seq_len, seq_len n_heads d_model -> seq_len n_heads")
@@ -491,3 +491,12 @@ with t.inference_mode():
     t.testing.assert_close(logit_attr.sum(1), correct_token_logits, atol=1e-3, rtol=0)
     print("Tests passed!")
 # %%
+
+embed = cache["embed"]
+l1_results = cache["result", 0]
+l2_results = cache["result", 1]
+logit_attr = logit_attribution(embed, l1_results, l2_results, model.W_U, tokens[0])
+
+plot_logit_attribution(model, logit_attr, tokens)
+
+# attributions that are heavy in the direct path are just easy bigrams, because that is all that can be approximated in that layer 
