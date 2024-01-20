@@ -500,3 +500,32 @@ logit_attr = logit_attribution(embed, l1_results, l2_results, model.W_U, tokens[
 plot_logit_attribution(model, logit_attr, tokens)
 
 # attributions that are heavy in the direct path are just easy bigrams, because that is all that can be approximated in that layer 
+
+# %% 
+
+seq_len = 50
+
+embed = rep_cache["embed"]
+l1_results = rep_cache["result", 0]
+l2_results = rep_cache["result", 1]
+first_half_tokens = rep_tokens[0, : 1 + seq_len]
+second_half_tokens = rep_tokens[0, seq_len:]
+
+print("Shape of embed: ", embed.shape)
+print("Shape of l1_results: ", l1_results.shape)
+print("Shape of l2_results: ", l2_results.shape)
+print("Shape of first_half_tokens: ", first_half_tokens.shape)
+print("Shape of second_half_tokens: ", second_half_tokens.shape)
+print("Shape of W_U: ", model.W_U.shape)
+
+
+first_half_logit_attr = logit_attribution(embed[:seq_len+1], l1_results[:seq_len+1], l2_results[:seq_len+1], model.W_U, first_half_tokens)
+second_half_logit_attr = logit_attribution(embed[seq_len:], l1_results[seq_len:], l2_results[seq_len:], model.W_U, second_half_tokens)
+
+assert first_half_logit_attr.shape == (seq_len, 2*model.cfg.n_heads + 1)
+assert second_half_logit_attr.shape == (seq_len, 2*model.cfg.n_heads + 1)
+
+plot_logit_attribution(model, first_half_logit_attr, first_half_tokens, "Logit attribution (first half of repeated sequence)")
+plot_logit_attribution(model, second_half_logit_attr, second_half_tokens, "Logit attribution (second half of repeated sequence)")
+
+# %%
