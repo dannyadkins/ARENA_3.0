@@ -600,3 +600,57 @@ imshow(
 )
 
 # %% 
+
+### Exercise: ablate every OTHER head
+
+def all_other_head_ablation_hook(
+    v: Float[Tensor, "batch seq n_heads d_head"],
+    hook: HookPoint,
+    head_index_to_ablate: int
+) -> Float[Tensor, "batch seq n_heads d_head"]:
+    zeros = t.zeros_like(v)
+    zeros[:, :, head_index_to_ablate] = v[:, :, head_index_to_ablate]
+    return zeros
+
+
+def get_all_other_ablation_scores(
+    model: HookedTransformer, 
+    tokens: Int[Tensor, "batch seq"]
+) -> Float[Tensor, "n_layers n_heads"]:
+    '''
+    Returns a tensor of shape (n_layers, n_heads) containing the increase in cross entropy loss from ablating the output of each head.
+    '''
+    # Initialize an object to store the ablation scores
+    ablation_scores = t.zeros((model.cfg.n_layers, model.cfg.n_heads), device=model.cfg.device)
+
+    # Calculating loss without any ablation, to act as a baseline
+    model.reset_hooks()
+    logits = model(tokens, return_type="logits")
+    loss_no_ablation = cross_entropy_loss(logits, tokens)
+
+    for layer in tqdm(range(model.cfg.n_layers)):
+        for head in range(model.cfg.n_heads):
+            # Use functools.partial to create a temporary hook function with the head number fixed
+            temp_hook_fn = functools.partial(all_other_head_ablation_hook, head_index_to_ablate=head)
+            # Run the model with the ablation hook
+            ablated_logits = model.run_with_hooks(tokens, fwd_hooks=[
+                (utils.get_act_name("v", layer), temp_hook_fn)
+            ])
+            # Calculate the logit difference
+            loss = cross_entropy_loss(ablated_logits, tokens)
+            # Store the result, subtracting the clean loss so that a value of zero means no change in loss
+            ablation_scores[layer, head] = loss - loss_no_ablation
+
+    return ablation_scores
+
+
+all_other_ablation_scores = get_all_other_ablation_scores(model, rep_tokens)
+imshow(
+    all_other_ablation_scores, 
+    labels={"x": "Head", "y": "Layer", "color": "Logit diff"},
+    title="Loss Difference After Ablating Heads", 
+    text_auto=".2f",
+    width=900, height=400
+)
+
+### Note that we observe similar results if we ablate all other heads 
