@@ -590,6 +590,7 @@ tests.test_get_ablation_scores(ablation_scores, model, rep_tokens)
 # %% 
 
 # this reveals that 1.4, 1.10, 0.7, 0.4 are really good for induction 
+# this is more of a causal intervention than just logit attribution 
 imshow(
     ablation_scores, 
     labels={"x": "Head", "y": "Layer", "color": "Logit diff"},
@@ -597,3 +598,5 @@ imshow(
     text_auto=".2f",
     width=900, height=400
 )
+
+# %% 
