@@ -529,3 +529,71 @@ plot_logit_attribution(model, first_half_logit_attr, first_half_tokens, "Logit a
 plot_logit_attribution(model, second_half_logit_attr, second_half_tokens, "Logit attribution (second half of repeated sequence)")
 
 # %%
+
+### Exercise: zero ablation on each head for repeating tokens 
+### This basically checks how much each head contributes to the performance of the induction.
+
+def head_ablation_hook(
+    v: Float[Tensor, "batch seq n_heads d_head"],
+    hook: HookPoint,
+    head_index_to_ablate: int
+) -> Float[Tensor, "batch seq n_heads d_head"]:
+    v[:, :, head_index_to_ablate] = t.zeros_like(v[:, :, head_index_to_ablate])
+    return v
+
+
+def cross_entropy_loss(logits, tokens):
+    '''
+    Computes the mean cross entropy between logits (the model's prediction) and tokens (the true values).
+
+    (optional, you can just use return_type="loss" instead.)
+    '''
+    log_probs = F.log_softmax(logits, dim=-1)
+    pred_log_probs = t.gather(log_probs[:, :-1], -1, tokens[:, 1:, None])[..., 0]
+    return -pred_log_probs.mean()
+
+
+def get_ablation_scores(
+    model: HookedTransformer, 
+    tokens: Int[Tensor, "batch seq"]
+) -> Float[Tensor, "n_layers n_heads"]:
+    '''
+    Returns a tensor of shape (n_layers, n_heads) containing the increase in cross entropy loss from ablating the output of each head.
+    '''
+    # Initialize an object to store the ablation scores
+    ablation_scores = t.zeros((model.cfg.n_layers, model.cfg.n_heads), device=model.cfg.device)
+
+    # Calculating loss without any ablation, to act as a baseline
+    model.reset_hooks()
+    logits = model(tokens, return_type="logits")
+    loss_no_ablation = cross_entropy_loss(logits, tokens)
+
+    for layer in tqdm(range(model.cfg.n_layers)):
+        for head in range(model.cfg.n_heads):
+            # Use functools.partial to create a temporary hook function with the head number fixed
+            temp_hook_fn = functools.partial(head_ablation_hook, head_index_to_ablate=head)
+            # Run the model with the ablation hook
+            ablated_logits = model.run_with_hooks(tokens, fwd_hooks=[
+                (utils.get_act_name("v", layer), temp_hook_fn)
+            ])
+            # Calculate the logit difference
+            loss = cross_entropy_loss(ablated_logits, tokens)
+            # Store the result, subtracting the clean loss so that a value of zero means no change in loss
+            ablation_scores[layer, head] = loss - loss_no_ablation
+
+    return ablation_scores
+
+
+ablation_scores = get_ablation_scores(model, rep_tokens)
+tests.test_get_ablation_scores(ablation_scores, model, rep_tokens)
+
+# %% 
+
+# this reveals that 1.4, 1.10, 0.7, 0.4 are really good for induction 
+imshow(
+    ablation_scores, 
+    labels={"x": "Head", "y": "Layer", "color": "Logit diff"},
+    title="Loss Difference After Ablating Heads", 
+    text_auto=".2f",
+    width=900, height=400
+)
