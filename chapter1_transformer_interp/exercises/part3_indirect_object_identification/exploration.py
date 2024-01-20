@@ -108,7 +108,6 @@ def get_ablation_scores(
 tokens = gpt2_small.to_tokens(sentences[0])
 
 ablation_scores = get_ablation_scores(gpt2_small, tokens)
-tests.test_get_ablation_scores(ablation_scores, gpt2_small, tokens)
 # %%
 imshow(
     ablation_scores, 
@@ -121,3 +120,8 @@ imshow(
 # Is that true? in gpt2_small, you get position too 
 # 11.8 also, which makes more sense
 # Very similar results, whether I use many sentences or just one... ablation is not telling the full story 
+
+# wait, that was if i was doing cross entropy the old way. I just need to be checking on the last token 
+
+# with updated, the biggest are:
+# 8.0, 6.3, 0.9, NOT 5.9, NOT a bunch in L0 (suppression?), 5.0
