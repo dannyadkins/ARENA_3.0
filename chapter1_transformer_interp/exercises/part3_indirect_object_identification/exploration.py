@@ -67,11 +67,10 @@ def head_ablation_hook(
 def cross_entropy_loss(logits, tokens):
     '''
     Computes the mean cross entropy between logits (the model's prediction) and tokens (the true values).
-
-    (optional, you can just use return_type="loss" instead.)
+    Now only checks the loss on the last token.
     '''
     log_probs = F.log_softmax(logits, dim=-1)
-    pred_log_probs = t.gather(log_probs[:, :-1], -1, tokens[:, 1:, None])[..., 0]
+    pred_log_probs = t.gather(log_probs[:, -2:-1], -1, tokens[:, -1:, None])[..., 0]
     return -pred_log_probs.mean()
 
 
@@ -118,3 +117,7 @@ imshow(
     text_auto=".2f",
     width=900, height=400
 )
+# layer 0, head 9 is strong, but how can that be? The first layer can only approximate bigrams.
+# Is that true? in gpt2_small, you get position too 
+# 11.8 also, which makes more sense
+# Very similar results, whether I use many sentences or just one... ablation is not telling the full story 
